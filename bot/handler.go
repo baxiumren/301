@@ -36,6 +36,17 @@ func (h *Handler) isAllowed(userID int64) bool {
 	return false
 }
 
+func (h *Handler) replyKeyboard() tgbotapi.ReplyKeyboardMarkup {
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🌐 Ganti Redirect"),
+			tgbotapi.NewKeyboardButton("📊 Status"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	return kb
+}
+
 func (h *Handler) send(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	if _, err := h.api.Send(msg); err != nil {
@@ -43,7 +54,16 @@ func (h *Handler) send(chatID int64, text string) {
 	}
 }
 
-func (h *Handler) sendWithKeyboard(chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
+func (h *Handler) sendWithReplyKeyboard(chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = h.replyKeyboard()
+	if _, err := h.api.Send(msg); err != nil {
+		log.Printf("send error: %v", err)
+	}
+}
+
+func (h *Handler) sendWithInlineKeyboard(chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = keyboard
 	if _, err := h.api.Send(msg); err != nil {
@@ -68,6 +88,10 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 
 	if update.Message.IsCommand() {
 		switch update.Message.Command() {
+		case "start":
+			h.handleStartCommand(update.Message)
+		case "help":
+			h.handleHelpCommand(update.Message)
 		case "redirect":
 			h.handleRedirectCommand(update.Message)
 		case "status":
@@ -76,7 +100,42 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 		return
 	}
 
+	// Handle reply keyboard button text
+	switch update.Message.Text {
+	case "🌐 Ganti Redirect":
+		h.handleRedirectCommand(update.Message)
+		return
+	case "📊 Status":
+		h.handleStatusCommand(update.Message)
+		return
+	}
+
 	h.handleURLInput(update.Message)
+}
+
+func (h *Handler) handleStartCommand(msg *tgbotapi.Message) {
+	text := "✨ *Selamat datang di CF Redirect Bot!*\n\n" +
+		"Bot ini digunakan untuk mengganti URL tujuan redirect domain Cloudflare.\n\n" +
+		"*Commands:*\n" +
+		"/redirect — Ganti URL redirect domain\n" +
+		"/status — Lihat URL redirect semua domain\n" +
+		"/help — Tampilkan bantuan ini\n\n" +
+		"Atau gunakan tombol di bawah 👇"
+	h.sendWithReplyKeyboard(msg.Chat.ID, text)
+}
+
+func (h *Handler) handleHelpCommand(msg *tgbotapi.Message) {
+	text := "📖 *CF Redirect Bot — Bantuan*\n\n" +
+		"*Commands:*\n" +
+		"/redirect — Pilih domain dan ganti URL tujuan redirect\n" +
+		"/status — Lihat URL redirect semua domain saat ini\n" +
+		"/help — Tampilkan pesan ini\n\n" +
+		"*Cara pakai:*\n" +
+		"1. Tekan tombol *🌐 Ganti Redirect* atau /redirect\n" +
+		"2. Pilih domain yang mau diganti\n" +
+		"3. Kirim URL baru (harus diawali `https://`)\n" +
+		"4. Selesai! ✅"
+	h.sendWithReplyKeyboard(msg.Chat.ID, text)
 }
 
 func (h *Handler) domainKeyboard() tgbotapi.InlineKeyboardMarkup {
@@ -104,7 +163,7 @@ func (h *Handler) cancelKeyboard() tgbotapi.InlineKeyboardMarkup {
 }
 
 func (h *Handler) handleRedirectCommand(msg *tgbotapi.Message) {
-	h.sendWithKeyboard(msg.Chat.ID, "🌐 Pilih domain yang mau diganti:", h.domainKeyboard())
+	h.sendWithInlineKeyboard(msg.Chat.ID, "🌐 Pilih domain yang mau diganti:", h.domainKeyboard())
 }
 
 func (h *Handler) handleStatusCommand(msg *tgbotapi.Message) {
@@ -144,7 +203,7 @@ func (h *Handler) handleCallback(cb *tgbotapi.CallbackQuery) {
 
 	if data == "cancel" {
 		h.sessions.Delete(userID)
-		h.send(cb.Message.Chat.ID, "🚫 Dibatalkan.")
+		h.sendWithReplyKeyboard(cb.Message.Chat.ID, "🚫 Dibatalkan.")
 		return
 	}
 
@@ -204,5 +263,5 @@ func (h *Handler) handleURLInput(msg *tgbotapi.Message) {
 	}
 
 	h.sessions.Delete(userID)
-	h.send(msg.Chat.ID, fmt.Sprintf("✅ Berhasil diubah!\nDomain : %s\nURL Baru: %s", sess.Domain.Name, newURL))
+	h.sendWithReplyKeyboard(msg.Chat.ID, fmt.Sprintf("✅ *Berhasil diubah!*\nDomain : %s\nURL Baru: %s", sess.Domain.Name, newURL))
 }
