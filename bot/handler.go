@@ -41,6 +41,7 @@ func (h *Handler) replyKeyboard() tgbotapi.ReplyKeyboardMarkup {
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🌐 Ganti Redirect"),
 			tgbotapi.NewKeyboardButton("📊 Status"),
+			tgbotapi.NewKeyboardButton("📖 Help"),
 		),
 	)
 	kb.ResizeKeyboard = true
@@ -80,6 +81,16 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 		return
 	}
 
+	// Auto welcome when bot is added to a group
+	if update.Message.NewChatMembers != nil {
+		for _, member := range update.Message.NewChatMembers {
+			if member.ID == h.api.Self.ID {
+				h.handleStartCommand(update.Message)
+				return
+			}
+		}
+	}
+
 	userID := update.Message.From.ID
 	if !h.isAllowed(userID) {
 		h.send(update.Message.Chat.ID, "⛔ Kamu tidak memiliki akses untuk menggunakan command ini.")
@@ -107,6 +118,9 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 		return
 	case "📊 Status":
 		h.handleStatusCommand(update.Message)
+		return
+	case "📖 Help":
+		h.handleHelpCommand(update.Message)
 		return
 	}
 
