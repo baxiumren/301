@@ -1,0 +1,20 @@
+telegram:
+  token: "test-token"
+
+cloudflare:
+  api_token: "cf-token"
+
+whitelist:
+  - 111
+  - 222
+
+domains:
+  - name: "example.com"
+    zone_id: "zone1"
+    type: "redirect_rules"
+    ruleset_id: "rs1"
+    rule_id: "r1"
+  - name: "example2.com"
+    zone_id: "zone2"
+    type: "page_rules"
+    rule_id: "r2"
