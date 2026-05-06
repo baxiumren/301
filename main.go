@@ -22,6 +22,16 @@ func main() {
 	}
 	log.Printf("Authorized on account %s", api.Self.UserName)
 
+	commands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "Mulai bot & tampilkan menu"},
+		{Command: "help", Description: "Panduan cara penggunaan"},
+		{Command: "redirect", Description: "Ganti URL redirect domain"},
+		{Command: "status", Description: "Lihat URL redirect semua domain"},
+	}
+	if _, err := api.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
+		log.Printf("failed to set commands: %v", err)
+	}
+
 	cfClient := cloudflare.New(cfg.Cloudflare.Email, cfg.Cloudflare.APIKey)
 	handler := bot.NewHandler(api, cfg, cfClient)
 
