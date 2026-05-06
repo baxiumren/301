@@ -1,0 +1,35 @@
+telegram:
+  token: "BOT_TOKEN_DARI_BOTFATHER"
+
+cloudflare:
+  api_token: "CF_API_TOKEN_DENGAN_PERMISSION_EDIT_RULES"
+
+whitelist:
+  - 123456789
+  - 987654321
+
+domains:
+  - name: "301maha.store"
+    zone_id: "ZONE_ID"
+    type: "redirect_rules"
+    ruleset_id: "RULESET_ID"
+    rule_id: "RULE_ID"
+  - name: "maha301.lol"
+    zone_id: "ZONE_ID"
+    type: "redirect_rules"
+    ruleset_id: "RULESET_ID"
+    rule_id: "RULE_ID"
+  - name: "maha55.id"
+    zone_id: "ZONE_ID"
+    type: "redirect_rules"
+    ruleset_id: "RULESET_ID"
+    rule_id: "RULE_ID"
+  - name: "maha66.id"
+    zone_id: "ZONE_ID"
+    type: "redirect_rules"
+    ruleset_id: "RULESET_ID"
+    rule_id: "RULE_ID"
+  - name: "mh301sl.store"
+    zone_id: "ZONE_ID"
+    type: "page_rules"
+    rule_id: "RULE_ID"
