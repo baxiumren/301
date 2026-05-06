@@ -19,22 +19,25 @@ type Client interface {
 }
 
 type httpClient struct {
-	apiToken   string
+	email      string
+	apiKey     string
 	baseURL    string
 	httpClient *http.Client
 }
 
-func New(apiToken string) Client {
+func New(email, apiKey string) Client {
 	return &httpClient{
-		apiToken:   apiToken,
+		email:      email,
+		apiKey:     apiKey,
 		baseURL:    defaultBaseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func NewWithBaseURL(apiToken, baseURL string) Client {
+func NewWithBaseURL(email, apiKey, baseURL string) Client {
 	return &httpClient{
-		apiToken:   apiToken,
+		email:      email,
+		apiKey:     apiKey,
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
@@ -53,7 +56,8 @@ func (c *httpClient) do(method, url string, body any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiToken)
+	req.Header.Set("X-Auth-Email", c.email)
+	req.Header.Set("X-Auth-Key", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)

@@ -22,7 +22,7 @@ func main() {
 	}
 	log.Printf("Authorized on account %s", api.Self.UserName)
 
-	cfClient := cloudflare.New(cfg.Cloudflare.APIToken)
+	cfClient := cloudflare.New(cfg.Cloudflare.Email, cfg.Cloudflare.APIKey)
 	handler := bot.NewHandler(api, cfg, cfClient)
 
 	u := tgbotapi.NewUpdate(0)

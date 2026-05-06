@@ -1,8 +1,8 @@
 package config_test
 
 import (
-	"testing"
 	"cf-redirect-bot/config"
+	"testing"
 )
 
 func TestLoad_ValidFile(t *testing.T) {
@@ -13,8 +13,11 @@ func TestLoad_ValidFile(t *testing.T) {
 	if cfg.Telegram.Token != "test-token" {
 		t.Errorf("got token %q, want %q", cfg.Telegram.Token, "test-token")
 	}
-	if cfg.Cloudflare.APIToken != "cf-token" {
-		t.Errorf("got api_token %q, want %q", cfg.Cloudflare.APIToken, "cf-token")
+	if cfg.Cloudflare.Email != "test@example.com" {
+		t.Errorf("got email %q, want %q", cfg.Cloudflare.Email, "test@example.com")
+	}
+	if cfg.Cloudflare.APIKey != "cf-key" {
+		t.Errorf("got api_key %q, want %q", cfg.Cloudflare.APIKey, "cf-key")
 	}
 	if len(cfg.Whitelist) != 2 {
 		t.Errorf("got %d whitelist entries, want 2", len(cfg.Whitelist))

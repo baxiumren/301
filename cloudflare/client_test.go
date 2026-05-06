@@ -12,7 +12,7 @@ import (
 )
 
 func newTestClient(server *httptest.Server) cloudflare.Client {
-	return cloudflare.NewWithBaseURL("test-token", server.URL)
+	return cloudflare.NewWithBaseURL("test@example.com", "test-api-key", server.URL)
 }
 
 func TestGetCurrentURL_RedirectRules(t *testing.T) {

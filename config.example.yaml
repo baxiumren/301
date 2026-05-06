@@ -2,7 +2,8 @@ telegram:
   token: "BOT_TOKEN_DARI_BOTFATHER"
 
 cloudflare:
-  api_token: "CF_API_TOKEN_DENGAN_PERMISSION_EDIT_RULES"
+  email: "EMAIL_AKUN_CLOUDFLARE"
+  api_key: "GLOBAL_API_KEY_CLOUDFLARE"
 
 whitelist:
   - 123456789

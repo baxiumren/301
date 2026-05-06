@@ -19,7 +19,8 @@ type Config struct {
 		Token string `yaml:"token"`
 	} `yaml:"telegram"`
 	Cloudflare struct {
-		APIToken string `yaml:"api_token"`
+		Email  string `yaml:"email"`
+		APIKey string `yaml:"api_key"`
 	} `yaml:"cloudflare"`
 	Whitelist []int64  `yaml:"whitelist"`
 	Domains   []Domain `yaml:"domains"`

@@ -2,7 +2,8 @@ telegram:
   token: "test-token"
 
 cloudflare:
-  api_token: "cf-token"
+  email: "test@example.com"
+  api_key: "cf-key"
 
 whitelist:
   - 111
