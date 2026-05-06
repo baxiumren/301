@@ -51,40 +51,75 @@ cf-redirect-bot/
 
 | Command | Fungsi |
 |---------|--------|
-| `/redirect` | Tampilkan list domain via inline keyboard |
-| `/ganti` | Sama dengan `/redirect` |
-
-Kedua command memicu flow yang identik.
+| `/redirect` | Tampilkan list domain via inline keyboard untuk ganti URL |
+| `/status` | Tampilkan URL tujuan redirect semua domain saat ini |
 
 ## UX Flow
 
+### Flow Ganti Redirect
+
 ```
-User: /redirect (atau /ganti)
+User: /redirect
 
 Bot: 🌐 Pilih domain yang mau diganti:
      [301maha.store]  [maha301.lol]
      [maha55.id]      [maha66.id]
      [mh301sl.store]
+     [❌ Cancel]
 
 User: *klik salah satu domain*
 
 Bot: 📌 301maha.store (Redirect Rules)
      URL sekarang: https://pemaindim.life/daftar?ref=mahaslot
 
-     Kirim URL tujuan baru:
+     Kirim URL tujuan baru (atau klik Cancel):
+     [❌ Cancel]
 
 User: https://newsite.com/daftar?ref=abc
 
 Bot: ✅ Berhasil diubah!
      Domain : 301maha.store
      URL Baru: https://newsite.com/daftar?ref=abc
+```
 
---- jika akses ditolak ---
+### Flow Cancel
 
+```
+User: *klik tombol Cancel kapanpun saat flow sedang berjalan*
+
+Bot: 🚫 Dibatalkan.
+```
+
+### Flow Status
+
+```
+User: /status
+
+Bot: 📊 Status Redirect Semua Domain:
+
+     🔹 301maha.store (Redirect Rules)
+     → https://pemaindim.life/daftar?ref=mahaslot
+
+     🔹 maha301.lol (Redirect Rules)
+     → https://...
+
+     🔹 maha55.id (Redirect Rules)
+     → https://...
+
+     🔹 maha66.id (Redirect Rules)
+     → https://...
+
+     🔹 mh301sl.store (Page Rules)
+     → https://maha-main.store/daftar?ref=hackgacor
+```
+
+### Akses Ditolak
+
+```
 Bot: ⛔ Kamu tidak memiliki akses untuk menggunakan command ini.
 ```
 
-State sementara (domain yang dipilih user) disimpan in-memory per user ID selama sesi input URL.
+State sementara (domain yang dipilih user) disimpan in-memory per user ID selama sesi input URL. Cancel menghapus state tersebut.
 
 ## Access Control
 
@@ -191,6 +226,7 @@ Bot memilih API yang tepat berdasarkan field `type` di config.
 | URL tidak valid | ⚠️ URL harus diawali dengan https:// |
 | User tidak di whitelist | ⛔ Kamu tidak memiliki akses |
 | Timeout input | ⏰ Sesi dibatalkan. Kirim /redirect untuk mulai lagi. |
+| CF API error saat /status | ❌ Gagal mengambil data domain X. |
 
 ## Out of Scope (V1)
 
