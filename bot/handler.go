@@ -73,22 +73,22 @@ func (h *Handler) sendWithInlineKeyboard(chatID int64, text string, keyboard tgb
 }
 
 func (h *Handler) Handle(update tgbotapi.Update) {
+	// Auto welcome when bot is added to a group
+	if update.MyChatMember != nil {
+		newStatus := update.MyChatMember.NewChatMember.Status
+		if newStatus == "member" || newStatus == "administrator" {
+			chatID := update.MyChatMember.Chat.ID
+			h.sendWelcome(chatID)
+		}
+		return
+	}
+
 	if update.CallbackQuery != nil {
 		h.handleCallback(update.CallbackQuery)
 		return
 	}
 	if update.Message == nil {
 		return
-	}
-
-	// Auto welcome when bot is added to a group
-	if update.Message.NewChatMembers != nil {
-		for _, member := range update.Message.NewChatMembers {
-			if member.ID == h.api.Self.ID {
-				h.handleStartCommand(update.Message)
-				return
-			}
-		}
 	}
 
 	userID := update.Message.From.ID
@@ -127,7 +127,7 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 	h.handleURLInput(update.Message)
 }
 
-func (h *Handler) handleStartCommand(msg *tgbotapi.Message) {
+func (h *Handler) sendWelcome(chatID int64) {
 	text := "✨ *Selamat datang di CF Redirect Bot!*\n\n" +
 		"Bot ini digunakan untuk mengganti URL tujuan redirect domain Cloudflare.\n\n" +
 		"*Commands:*\n" +
@@ -135,7 +135,11 @@ func (h *Handler) handleStartCommand(msg *tgbotapi.Message) {
 		"/status — Lihat URL redirect semua domain\n" +
 		"/help — Tampilkan bantuan ini\n\n" +
 		"Atau gunakan tombol di bawah 👇"
-	h.sendWithReplyKeyboard(msg.Chat.ID, text)
+	h.sendWithReplyKeyboard(chatID, text)
+}
+
+func (h *Handler) handleStartCommand(msg *tgbotapi.Message) {
+	h.sendWelcome(msg.Chat.ID)
 }
 
 func (h *Handler) handleHelpCommand(msg *tgbotapi.Message) {

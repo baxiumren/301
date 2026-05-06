@@ -37,6 +37,7 @@ func main() {
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
+	u.AllowedUpdates = []string{"message", "callback_query", "my_chat_member"}
 	updates := api.GetUpdatesChan(u)
 
 	log.Println("Bot started, listening for updates...")
