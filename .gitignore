@@ -2,3 +2,7 @@ config.yaml
 cf-redirect-bot
 cf-redirect-bot.exe
 *.exe
+*.log
+*.out
+.DS_Store
+Thumbs.db
