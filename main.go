@@ -25,15 +25,20 @@ func main() {
 	commands := []tgbotapi.BotCommand{
 		{Command: "start", Description: "Mulai bot & tampilkan menu"},
 		{Command: "help", Description: "Panduan cara penggunaan"},
-		{Command: "redirect", Description: "Ganti URL redirect domain"},
+		{Command: "redirect", Description: "Ganti URL 1 domain"},
+		{Command: "bulk", Description: "Ganti URL beberapa domain sekaligus"},
 		{Command: "status", Description: "Lihat URL redirect semua domain"},
+		{Command: "history", Description: "Lihat 10 riwayat perubahan terakhir"},
+		{Command: "adduser", Description: "Tambah user ke whitelist"},
+		{Command: "removeuser", Description: "Hapus user dari whitelist"},
+		{Command: "listusers", Description: "Lihat daftar user whitelist"},
 	}
 	if _, err := api.Request(tgbotapi.NewSetMyCommands(commands...)); err != nil {
 		log.Printf("failed to set commands: %v", err)
 	}
 
 	cfClient := cloudflare.New(cfg.Cloudflare.Email, cfg.Cloudflare.APIKey)
-	handler := bot.NewHandler(api, cfg, cfClient)
+	handler := bot.NewHandler(api, cfg, cfClient, "config.yaml")
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60

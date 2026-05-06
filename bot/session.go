@@ -8,8 +8,10 @@ import (
 )
 
 type Session struct {
-	Domain    *config.Domain
-	ExpiresAt time.Time
+	Domain     *config.Domain
+	OldURL     string
+	PendingURL string
+	ExpiresAt  time.Time
 }
 
 type SessionStore struct {
@@ -31,11 +33,12 @@ func NewSessionStoreWithTimeout(timeout time.Duration) *SessionStore {
 	return s
 }
 
-func (s *SessionStore) Set(userID int64, domain *config.Domain) {
+func (s *SessionStore) Set(userID int64, domain *config.Domain, oldURL string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.store[userID] = &Session{
 		Domain:    domain,
+		OldURL:    oldURL,
 		ExpiresAt: time.Now().Add(s.timeout),
 	}
 }
