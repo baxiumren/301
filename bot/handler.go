@@ -185,9 +185,19 @@ func (h *Handler) Handle(update tgbotapi.Update) {
 
 	// Cloudflare belum dikonfigurasi → paksa setup CF dulu sebelum apapun
 	if !h.isCFConfigured() {
+		// Ignore commands selain /start saat CF belum dikonfigurasi
+		if update.Message.IsCommand() {
+			cmd := update.Message.Command()
+			if cmd != "start" && cmd != "help" && cmd != "setcf" {
+				return
+			}
+		}
 		if sess, ok := setupSessions.get(userID); ok {
-			h.handleSetupInput(update.Message, sess)
-			return
+			// Jangan proses command sebagai input wizard
+			if !update.Message.IsCommand() {
+				h.handleSetupInput(update.Message, sess)
+				return
+			}
 		}
 		// Siapapun di grup yang kirim pesan → mulai wizard CF
 		setupSessions.set(userID, &SetupSession{Phase: setupCFEmail})
