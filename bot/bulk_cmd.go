@@ -170,6 +170,12 @@ func (h *Handler) handleBulkConfirmYes(msg *tgbotapi.Message) {
 		username = "@" + msg.From.UserName
 	}
 
+	// Loading indicator
+	selectedCount := len(sess.SelectedNames())
+	loadMsg, loadErr := h.api.Send(tgbotapi.NewMessage(msg.Chat.ID,
+		fmt.Sprintf("⏳ Mengubah %d domain di Cloudflare...", selectedCount),
+	))
+
 	var success, failed []string
 	for _, d := range h.cfg.Domains {
 		if !sess.Selected[d.Name] {
@@ -193,6 +199,10 @@ func (h *Handler) handleBulkConfirmYes(msg *tgbotapi.Message) {
 	}
 
 	h.bulk.Delete(userID)
+
+	if loadErr == nil {
+		h.api.Request(tgbotapi.NewDeleteMessage(msg.Chat.ID, loadMsg.MessageID))
+	}
 
 	var sb strings.Builder
 	if len(success) > 0 {

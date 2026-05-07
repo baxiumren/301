@@ -253,10 +253,20 @@ func (h *Handler) handleConfirmRedirectYes(msg *tgbotapi.Message) {
 	pendingURL := sess.PendingURL
 	oldURL := sess.OldURL
 
+	// Loading indicator
+	loadMsg, loadErr := h.api.Send(tgbotapi.NewMessage(msg.Chat.ID, "⏳ Mengubah URL di Cloudflare..."))
+
 	if err := h.cfFor(*sess.Domain).UpdateURL(*sess.Domain, pendingURL); err != nil {
 		log.Printf("update URL error for %s: %v", domainName, err)
+		if loadErr == nil {
+			h.api.Request(tgbotapi.NewDeleteMessage(msg.Chat.ID, loadMsg.MessageID))
+		}
 		h.sendWizardMsg(msg.Chat.ID, "❌ Gagal mengubah URL. Coba lagi.")
 		return
+	}
+
+	if loadErr == nil {
+		h.api.Request(tgbotapi.NewDeleteMessage(msg.Chat.ID, loadMsg.MessageID))
 	}
 
 	username := msg.From.FirstName
