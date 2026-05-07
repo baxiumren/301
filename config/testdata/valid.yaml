@@ -2,12 +2,11 @@ telegram:
   token: "test-token"
 
 cloudflare:
-  email: "test@example.com"
-  api_key: "cf-key"
+  - name: "default"
+    email: "test@example.com"
+    api_key: "cf-key"
 
-whitelist:
-  - 111
-  - 222
+allowed_chat_id: -123456789
 
 domains:
   - name: "example.com"
@@ -15,7 +14,9 @@ domains:
     type: "redirect_rules"
     ruleset_id: "rs1"
     rule_id: "r1"
+    cf_account: "default"
   - name: "example2.com"
     zone_id: "zone2"
     type: "page_rules"
     rule_id: "r2"
+    cf_account: "default"

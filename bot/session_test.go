@@ -12,7 +12,7 @@ func TestSessionStore_SetAndGet(t *testing.T) {
 	store := bot.NewSessionStore()
 	domain := &config.Domain{Name: "example.com"}
 
-	store.Set(123, domain)
+	store.Set(123, domain, "https://old.example.com")
 
 	sess, ok := store.Get(123)
 	if !ok {
@@ -33,7 +33,7 @@ func TestSessionStore_GetMissing(t *testing.T) {
 
 func TestSessionStore_Delete(t *testing.T) {
 	store := bot.NewSessionStore()
-	store.Set(123, &config.Domain{Name: "example.com"})
+	store.Set(123, &config.Domain{Name: "example.com"}, "https://old.example.com")
 	store.Delete(123)
 	_, ok := store.Get(123)
 	if ok {
@@ -43,7 +43,7 @@ func TestSessionStore_Delete(t *testing.T) {
 
 func TestSessionStore_Expiry(t *testing.T) {
 	store := bot.NewSessionStoreWithTimeout(50 * time.Millisecond)
-	store.Set(123, &config.Domain{Name: "example.com"})
+	store.Set(123, &config.Domain{Name: "example.com"}, "https://old.example.com")
 
 	time.Sleep(100 * time.Millisecond)
 

@@ -3,9 +3,12 @@ package bot
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"cf-redirect-bot/config"
 )
+
+const bulkTimeout = 5 * time.Minute
 
 type BulkSession struct {
 	Selected   map[string]bool
@@ -13,6 +16,7 @@ type BulkSession struct {
 	ChatID     int64
 	PendingURL string
 	Phase      string // "selecting" | "awaiting_url" | "confirming"
+	ExpiresAt  time.Time
 }
 
 func (s *BulkSession) SelectedNames() []string {
@@ -32,7 +36,9 @@ type BulkStore struct {
 }
 
 func NewBulkStore() *BulkStore {
-	return &BulkStore{store: make(map[int64]*BulkSession)}
+	b := &BulkStore{store: make(map[int64]*BulkSession)}
+	go b.cleanup()
+	return b
 }
 
 func (b *BulkStore) New(userID, chatID int64, messageID int, domains []config.Domain) {
@@ -47,6 +53,7 @@ func (b *BulkStore) New(userID, chatID int64, messageID int, domains []config.Do
 		MessageID: messageID,
 		ChatID:    chatID,
 		Phase:     "selecting",
+		ExpiresAt: time.Now().Add(bulkTimeout),
 	}
 }
 
@@ -55,6 +62,7 @@ func (b *BulkStore) Toggle(userID int64, domainName string) {
 	defer b.mu.Unlock()
 	if sess, ok := b.store[userID]; ok {
 		sess.Selected[domainName] = !sess.Selected[domainName]
+		sess.ExpiresAt = time.Now().Add(bulkTimeout) // refresh on activity
 	}
 }
 
@@ -62,6 +70,13 @@ func (b *BulkStore) Get(userID int64) (*BulkSession, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	sess, ok := b.store[userID]
+	if !ok {
+		return nil, false
+	}
+	if time.Now().After(sess.ExpiresAt) {
+		delete(b.store, userID)
+		return nil, false
+	}
 	return sess, ok
 }
 
@@ -70,6 +85,7 @@ func (b *BulkStore) SetAwaitingURL(userID int64) {
 	defer b.mu.Unlock()
 	if sess, ok := b.store[userID]; ok {
 		sess.Phase = "awaiting_url"
+		sess.ExpiresAt = time.Now().Add(bulkTimeout)
 	}
 }
 
@@ -79,6 +95,7 @@ func (b *BulkStore) SetPendingURL(userID int64, url string) {
 	if sess, ok := b.store[userID]; ok {
 		sess.PendingURL = url
 		sess.Phase = "confirming"
+		sess.ExpiresAt = time.Now().Add(bulkTimeout)
 	}
 }
 
@@ -86,4 +103,16 @@ func (b *BulkStore) Delete(userID int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.store, userID)
+}
+
+func (b *BulkStore) cleanup() {
+	for range time.Tick(30 * time.Second) {
+		b.mu.Lock()
+		for id, sess := range b.store {
+			if time.Now().After(sess.ExpiresAt) {
+				delete(b.store, id)
+			}
+		}
+		b.mu.Unlock()
+	}
 }

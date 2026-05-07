@@ -11,41 +11,107 @@ import (
 	"cf-redirect-bot/config"
 )
 
-func (h *Handler) domainKeyboard() tgbotapi.InlineKeyboardMarkup {
-	var rows [][]tgbotapi.InlineKeyboardButton
-	var row []tgbotapi.InlineKeyboardButton
+// domainLabel returns "name [LABEL]" kalau label ada, atau cukup "name".
+func domainLabel(name, label string) string {
+	if label != "" {
+		return name + " [" + label + "]"
+	}
+	return name
+}
+
+// sendDomainReplyKeyboard: tampilkan semua domain di teks + reply keyboard bawah.
+func (h *Handler) sendDomainReplyKeyboard(chatID int64) {
+	var rows [][]tgbotapi.KeyboardButton
+	var sb strings.Builder
+	sb.WriteString("🌐 *Pilih domain yang mau diganti:*\n\n")
 	for i, d := range h.cfg.Domains {
-		row = append(row, tgbotapi.NewInlineKeyboardButtonData(d.Name, "domain:"+d.Name))
-		if len(row) == 2 || i == len(h.cfg.Domains)-1 {
-			rows = append(rows, row)
-			row = nil
+		rows = append(rows, tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(domainLabel(d.Name, d.Label)),
+		))
+		sb.WriteString(fmt.Sprintf("%d. *%s*\n", i+1, domainLabel(d.Name, d.Label)))
+	}
+	rows = append(rows, tgbotapi.NewKeyboardButtonRow(
+		tgbotapi.NewKeyboardButton("❌ Cancel"),
+	))
+	kb := tgbotapi.NewReplyKeyboard(rows...)
+	kb.ResizeKeyboard = true
+	msg := tgbotapi.NewMessage(chatID, sb.String())
+	msg.ParseMode = "Markdown"
+	msg.ReplyMarkup = kb
+	if _, err := h.api.Send(msg); err != nil {
+		log.Printf("send error: %v", err)
+	}
+}
+
+// findDomainByLabel: cari domain berdasarkan teks button (format: "name" atau "name [LABEL]").
+func (h *Handler) findDomainByLabel(text string) *config.Domain {
+	for i := range h.cfg.Domains {
+		if domainLabel(h.cfg.Domains[i].Name, h.cfg.Domains[i].Label) == text {
+			return &h.cfg.Domains[i]
 		}
 	}
-	rows = append(rows, []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("❌ Cancel", "cancel"),
-	})
-	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+	return nil
 }
 
 func (h *Handler) handleRedirectCommand(msg *tgbotapi.Message) {
-	h.bulk.Delete(msg.From.ID)
-	h.sendWithInlineKeyboard(msg.Chat.ID, "🌐 Pilih domain yang mau diganti:", h.domainKeyboard())
-}
-
-func (h *Handler) handleCallbackDomain(cb *tgbotapi.CallbackQuery, domainName string) {
-	var found *config.Domain
-	for i := range h.cfg.Domains {
-		if h.cfg.Domains[i].Name == domainName {
-			found = &h.cfg.Domains[i]
-			break
-		}
+	if !h.isCFConfigured() {
+		h.sendMd(msg.Chat.ID, "⚠️ Cloudflare belum dikonfigurasi.\n\nGunakan `/setcf <email> <api_key>` terlebih dahulu.")
+		return
 	}
-	if found == nil {
-		h.send(cb.Message.Chat.ID, "❌ Domain tidak ditemukan.")
+	if len(h.cfg.Domains) == 0 {
+		h.sendMd(msg.Chat.ID, "⚠️ Belum ada domain.\n\nGunakan ⚙️ *Kelola Domain* untuk menambahkan domain.")
+		return
+	}
+	// Bersihkan state lama
+	h.bulk.Delete(msg.From.ID)
+	h.sessions.Delete(msg.From.ID)
+
+	// Kalau cuma 1 domain → langsung skip picker, lompat ke input URL
+	if len(h.cfg.Domains) == 1 {
+		domain := &h.cfg.Domains[0]
+		currentURL, err := h.cfFor(*domain).GetCurrentURL(*domain)
+		if err != nil {
+			log.Printf("get URL error for %s: %v", domain.Name, err)
+			currentURL = "(gagal mengambil URL saat ini)"
+		}
+		label := "Redirect Rules"
+		if domain.Type == "page_rules" {
+			label = "Page Rules"
+		}
+		h.sessions.Set(msg.From.ID, domain, currentURL)
+		text := fmt.Sprintf(
+			"📌 *%s* (%s)\n\n"+
+				"URL sekarang:\n`%s`\n\n"+
+				"━━━━━━━━━━━━━━━━━━━━\n"+
+				"Kirim *URL tujuan baru*:\n\n"+
+				"📍 Harus diawali `https://`\n\n"+
+				"Contoh:\n`https://google.com`\n`https://landing.example.com/promo`",
+			domainLabel(domain.Name, domain.Label), label, currentURL,
+		)
+		h.sendWizardMsg(msg.Chat.ID, text)
 		return
 	}
 
-	currentURL, err := h.cf.GetCurrentURL(*found)
+	// Lebih dari 1 domain → tampilkan keyboard pilih domain
+	setRedirectAwaitDomain(msg.From.ID)
+	h.sendDomainReplyKeyboard(msg.Chat.ID)
+}
+
+// handleRedirectDomainSelect: dipanggil dari handleURLInput ketika user sedang pilih domain.
+func (h *Handler) handleRedirectDomainSelect(msg *tgbotapi.Message) {
+	userID := msg.From.ID
+	input := strings.TrimSpace(msg.Text)
+
+	found := h.findDomainByLabel(input)
+	if found == nil {
+		// Tidak cocok → tampilkan ulang pilihan
+		h.sendDomainReplyKeyboard(msg.Chat.ID)
+		return
+	}
+
+	deleteRedirectAwaitDomain(userID)
+
+	currentURL, err := h.cfFor(*found).GetCurrentURL(*found)
 	if err != nil {
 		log.Printf("get URL error for %s: %v", found.Name, err)
 		currentURL = "(gagal mengambil URL saat ini)"
@@ -56,12 +122,41 @@ func (h *Handler) handleCallbackDomain(cb *tgbotapi.CallbackQuery, domainName st
 		label = "Page Rules"
 	}
 
-	h.sessions.Set(cb.From.ID, found, currentURL)
-	text := fmt.Sprintf("📌 *%s* (%s)\nURL sekarang: %s\n\nKirim URL tujuan baru (atau klik Cancel):", found.Name, label, currentURL)
-	replyMsg := tgbotapi.NewMessage(cb.Message.Chat.ID, text)
-	replyMsg.ParseMode = "Markdown"
-	replyMsg.ReplyMarkup = h.cancelKeyboard()
-	if _, err := h.api.Send(replyMsg); err != nil {
+	h.sessions.Set(userID, found, currentURL)
+
+	text := fmt.Sprintf(
+		"📌 *%s* (%s)\n\n"+
+			"URL sekarang:\n`%s`\n\n"+
+			"━━━━━━━━━━━━━━━━━━━━\n"+
+			"Kirim *URL tujuan baru*:\n\n"+
+			"📍 Harus diawali `https://`\n\n"+
+			"Contoh:\n`https://google.com`\n`https://landing.example.com/promo`",
+		domainLabel(found.Name, found.Label), label, currentURL,
+	)
+	h.sendWizardMsg(msg.Chat.ID, text)
+}
+
+// sendRedirectConfirmMsg: tampilkan pesan konfirmasi perubahan URL dengan reply keyboard.
+func (h *Handler) sendRedirectConfirmMsg(chatID int64, sess *Session) {
+	text := fmt.Sprintf(
+		"⚠️ *Konfirmasi Perubahan*\n\n"+
+			"🔹 Domain: *%s*\n"+
+			"⬅️ URL Lama:\n`%s`\n"+
+			"➡️ URL Baru:\n`%s`\n\n"+
+			"Yakin mau diganti?",
+		sess.Domain.Name, sess.OldURL, sess.PendingURL,
+	)
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("✅ Ya, Ganti"),
+			tgbotapi.NewKeyboardButton("❌ Cancel"),
+		),
+	)
+	kb.ResizeKeyboard = true
+	out := tgbotapi.NewMessage(chatID, text)
+	out.ParseMode = "Markdown"
+	out.ReplyMarkup = kb
+	if _, err := h.api.Send(out); err != nil {
 		log.Printf("send error: %v", err)
 	}
 }
@@ -69,46 +164,88 @@ func (h *Handler) handleCallbackDomain(cb *tgbotapi.CallbackQuery, domainName st
 func (h *Handler) handleURLInput(msg *tgbotapi.Message) {
 	userID := msg.From.ID
 
-	// Bulk session duluan
-	if bulkSess, ok := h.bulk.Get(userID); ok && bulkSess.Phase == "awaiting_url" {
-		h.handleBulkURLInput(msg, bulkSess)
+	// Setup wizard session (CF email/apikey)
+	if setupSess, ok := setupSessions.get(userID); ok {
+		h.handleSetupInput(msg, setupSess)
 		return
 	}
 
+	// Add domain session
+	if addSess, ok := addDomainSessions.get(userID); ok {
+		h.handleAddDomainInput(msg, addSess)
+		return
+	}
+
+	// List filter session
+	if listFilters.has(userID) {
+		h.handleListFilterInput(msg)
+		return
+	}
+
+	// Redirect domain selection
+	if hasRedirectAwaitDomain(userID) {
+		h.handleRedirectDomainSelect(msg)
+		return
+	}
+
+	// Remove domain selection
+	if hasRemoveDomainSelectAwait(userID) {
+		h.handleRemoveDomainSelect(msg)
+		return
+	}
+
+	// Rollback selection
+	if hasRollbackAwait(userID) {
+		h.handleRollbackSelect(msg)
+		return
+	}
+
+	// Bulk session — handle semua phase
+	if bulkSess, ok := h.bulk.Get(userID); ok {
+		switch bulkSess.Phase {
+		case "selecting":
+			h.handleBulkSelectInput(msg, bulkSess)
+		case "awaiting_url":
+			h.handleBulkURLInput(msg, bulkSess)
+		case "confirming":
+			// Input lain saat konfirmasi → tampilkan ulang pesan konfirmasi
+			h.sendBulkConfirmMsg(msg.Chat.ID, bulkSess)
+		}
+		return
+	}
+
+	// Redirect session
 	sess, ok := h.sessions.Get(userID)
 	if !ok {
+		return
+	}
+
+	// Jika sudah di tahap konfirmasi, tampilkan ulang pesan konfirmasi
+	if sess.PendingURL != "" {
+		h.sendRedirectConfirmMsg(msg.Chat.ID, sess)
 		return
 	}
 
 	newURL := strings.TrimSpace(msg.Text)
 	if !strings.HasPrefix(newURL, "https://") {
-		h.send(msg.Chat.ID, "⚠️ URL harus diawali dengan https://")
+		h.sendWizardMsg(msg.Chat.ID, "⚠️ URL harus diawali dengan `https://`\n\nContoh:\n`https://google.com`")
 		return
 	}
 
 	sess.PendingURL = newURL
-	text := fmt.Sprintf(
-		"⚠️ *Konfirmasi Perubahan*\n\n🔹 Domain: *%s*\n⬅️ URL Lama:\n%s\n➡️ URL Baru:\n%s\n\nYakin mau diganti?",
-		sess.Domain.Name, sess.OldURL, newURL,
-	)
-	confirmMsg := tgbotapi.NewMessage(msg.Chat.ID, text)
-	confirmMsg.ParseMode = "Markdown"
-	confirmMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
-		[]tgbotapi.InlineKeyboardButton{
-			tgbotapi.NewInlineKeyboardButtonData("✅ Ya, Ganti", "confirm_yes"),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Batal", "confirm_no"),
-		},
-	)
-	if _, err := h.api.Send(confirmMsg); err != nil {
-		log.Printf("send error: %v", err)
-	}
+	h.sendRedirectConfirmMsg(msg.Chat.ID, sess)
 }
 
-func (h *Handler) handleCallbackConfirmYes(cb *tgbotapi.CallbackQuery) {
-	userID := cb.From.ID
+// handleConfirmRedirectYes: dipanggil saat user tap "✅ Ya, Ganti" dari reply keyboard.
+func (h *Handler) handleConfirmRedirectYes(msg *tgbotapi.Message) {
+	userID := msg.From.ID
 	sess, ok := h.sessions.Get(userID)
 	if !ok {
-		h.send(cb.Message.Chat.ID, "⏰ Sesi sudah habis. Mulai ulang.")
+		h.sendWithReplyKeyboard(msg.Chat.ID, userID, "⏰ Sesi sudah habis. Mulai ulang.")
+		return
+	}
+	if sess.PendingURL == "" {
+		h.sendWithReplyKeyboard(msg.Chat.ID, userID, "⚠️ Tidak ada URL yang dikonfirmasi.")
 		return
 	}
 
@@ -116,12 +253,47 @@ func (h *Handler) handleCallbackConfirmYes(cb *tgbotapi.CallbackQuery) {
 	pendingURL := sess.PendingURL
 	oldURL := sess.OldURL
 
-	if err := h.cf.UpdateURL(*sess.Domain, pendingURL); err != nil {
+	if err := h.cfFor(*sess.Domain).UpdateURL(*sess.Domain, pendingURL); err != nil {
+		log.Printf("update URL error for %s: %v", domainName, err)
+		h.sendWizardMsg(msg.Chat.ID, "❌ Gagal mengubah URL. Coba lagi.")
+		return
+	}
+
+	username := msg.From.FirstName
+	if msg.From.UserName != "" {
+		username = "@" + msg.From.UserName
+	}
+	appendHistory(HistoryEntry{
+		Time:     time.Now(),
+		UserID:   userID,
+		Username: username,
+		Domain:   domainName,
+		OldURL:   oldURL,
+		NewURL:   pendingURL,
+	})
+
+	h.sessions.Delete(userID)
+	h.sendWithReplyKeyboard(msg.Chat.ID, userID,
+		fmt.Sprintf("✅ *Berhasil diubah!*\n👤 %s\n🔹 Domain: *%s*\n➡️ URL Baru:\n`%s`", username, domainName, pendingURL),
+	)
+}
+
+// handleCallbackConfirmYes / No: fallback untuk pesan lama yang masih punya inline button.
+func (h *Handler) handleCallbackConfirmYes(cb *tgbotapi.CallbackQuery) {
+	userID := cb.From.ID
+	sess, ok := h.sessions.Get(userID)
+	if !ok {
+		h.send(cb.Message.Chat.ID, "⏰ Sesi sudah habis. Mulai ulang.")
+		return
+	}
+	domainName := sess.Domain.Name
+	pendingURL := sess.PendingURL
+	oldURL := sess.OldURL
+	if err := h.cfFor(*sess.Domain).UpdateURL(*sess.Domain, pendingURL); err != nil {
 		log.Printf("update URL error for %s: %v", domainName, err)
 		h.send(cb.Message.Chat.ID, "❌ Gagal mengubah URL. Coba lagi.")
 		return
 	}
-
 	username := cb.From.FirstName
 	if cb.From.UserName != "" {
 		username = "@" + cb.From.UserName
@@ -134,12 +306,13 @@ func (h *Handler) handleCallbackConfirmYes(cb *tgbotapi.CallbackQuery) {
 		OldURL:   oldURL,
 		NewURL:   pendingURL,
 	})
-
 	h.sessions.Delete(userID)
-	h.sendWithReplyKeyboard(cb.Message.Chat.ID, fmt.Sprintf("✅ *Berhasil diubah!*\nDomain: %s\nURL Baru: %s", domainName, pendingURL))
+	h.sendWithReplyKeyboard(cb.Message.Chat.ID, userID,
+		fmt.Sprintf("✅ *Berhasil diubah!*\n👤 %s\n🔹 Domain: *%s*\n➡️ URL Baru:\n`%s`", username, domainName, pendingURL),
+	)
 }
 
 func (h *Handler) handleCallbackConfirmNo(cb *tgbotapi.CallbackQuery) {
 	h.sessions.Delete(cb.From.ID)
-	h.sendWithReplyKeyboard(cb.Message.Chat.ID, "🚫 Dibatalkan.")
+	h.sendWithReplyKeyboard(cb.Message.Chat.ID, cb.From.ID, "🚫 Dibatalkan.")
 }
