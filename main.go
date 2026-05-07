@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -38,6 +40,22 @@ func main() {
 	}
 
 	handler := bot.NewHandler(api, cfg, "config.yaml")
+
+	// Kirim notif startup ke grup jika allowed_chat_id sudah dikonfigurasi
+	if cfg.AllowedChatID != 0 {
+		startTime := time.Now().Format("02 Jan 2006 15:04:05")
+		notif := fmt.Sprintf(
+			"🟢 *Bot Online*\n\n"+
+				"⏰ `%s`\n"+
+				"🤖 @%s siap menerima perintah\\.",
+			startTime, api.Self.UserName,
+		)
+		msg := tgbotapi.NewMessage(cfg.AllowedChatID, notif)
+		msg.ParseMode = "MarkdownV2"
+		if _, err := api.Send(msg); err != nil {
+			log.Printf("failed to send startup notification: %v", err)
+		}
+	}
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
