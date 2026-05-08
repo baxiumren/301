@@ -45,13 +45,13 @@ func main() {
 	if cfg.AllowedChatID != 0 {
 		startTime := time.Now().Format("02 Jan 2006 15:04:05")
 		notif := fmt.Sprintf(
-			"🟢 *Bot Online*\n\n"+
-				"⏰ `%s`\n"+
+			"🟢 <b>Bot Online</b>\n\n"+
+				"⏰ <code>%s</code>\n"+
 				"🤖 @%s siap menerima perintah.",
 			startTime, api.Self.UserName,
 		)
 		msg := tgbotapi.NewMessage(cfg.AllowedChatID, notif)
-		msg.ParseMode = "Markdown"
+		msg.ParseMode = "HTML"
 		if _, err := api.Send(msg); err != nil {
 			log.Printf("failed to send startup notification: %v", err)
 		}
